@@ -412,20 +412,22 @@ class SentimentVisualizer:
             Optional[str]: Created chart file path
         """
         try:
-            # Prepare data
-            languages = []
-            positive_counts = []
-            neutral_counts = []
-            negative_counts = []
-            
-            for lang, data in all_results.items():
-                if 'sentiment_counts' in data:
-                    counts = data['sentiment_counts']
-                    languages.append(lang)
-                    positive_counts.append(counts.get('positive', 0))
-                    neutral_counts.append(counts.get('neutral', 0))
-                    negative_counts.append(counts.get('negative', 0))
-            
+            # Aggregate sentiment counts by language (all_results is keyed by sheet name,
+            # and multiple sheets can share the same language)
+            language_totals: Dict[str, Dict[str, int]] = {}
+            for sheet_data in all_results.values():
+                if 'sentiment_counts' not in sheet_data or 'language' not in sheet_data:
+                    continue
+                lang = sheet_data['language']
+                totals = language_totals.setdefault(lang, {'positive': 0, 'neutral': 0, 'negative': 0})
+                for label, count in sheet_data['sentiment_counts'].items():
+                    totals[label] = totals.get(label, 0) + count
+
+            languages = list(language_totals.keys())
+            positive_counts = [language_totals[lang]['positive'] for lang in languages]
+            neutral_counts = [language_totals[lang]['neutral'] for lang in languages]
+            negative_counts = [language_totals[lang]['negative'] for lang in languages]
+
             if not languages:
                 return None
             

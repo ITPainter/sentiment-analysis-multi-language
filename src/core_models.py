@@ -33,9 +33,12 @@ class ModelManager:
             if torch.cuda.is_available():
                 device = torch.device("cuda")
                 logger.info("CUDA GPU available - running in GPU mode")
+            elif torch.backends.mps.is_available():
+                device = torch.device("mps")
+                logger.info("Apple Silicon MPS available - running in MPS mode")
             else:
                 device = torch.device("cpu")
-                logger.info("CUDA GPU not available - running in CPU mode")
+                logger.info("No GPU available - running in CPU mode")
         else:
             device = torch.device(SENTIMENT_CONFIG['device'])
         
@@ -238,14 +241,22 @@ class ModelManager:
         
         # Model-specific mapping
         model_specific_mapping = {
-            # Chinese model (2-class)
-            'IDEA-CCNL/Erlangshen-RoBERTa-110M-Sentiment': ['negative', 'positive'],
-            
+            # Korean models
+            'snunlp/KR-FinBert-SC': ['negative', 'positive', 'neutral'],  # 3-class
+            'sangrimlee/bert-base-multilingual-cased-nsmc': ['negative', 'positive'],  # 2-class
+            'matthewburke/korean_sentiment': ['negative', 'positive'],  # 2-class
+
+            # Chinese models (all 2-class)
+            'IDEA-CCNL/Erlangshen-Roberta-110M-Sentiment': ['negative', 'positive'],
+            'uer/roberta-base-finetuned-dianping-chinese': ['negative', 'positive'],
+            'uer/roberta-base-finetuned-jd-binary-chinese': ['negative', 'positive'],
+
             # English model (2-class)
             'distilbert-base-uncased-finetuned-sst-2-english': ['negative', 'positive'],
-            
-            # Korean model (3-class)
-            'snunlp/KR-FinBert-SC': ['negative', 'positive', 'neutral'],
+
+            # Japanese models
+            'koheiduck/bert-japanese-finetuned-sentiment': ['neutral', 'negative', 'positive'],  # 3-class, non-default order
+            'jarvisx17/japanese-sentiment-analysis': ['negative', 'positive'],  # 2-class
         }
         
         return model_specific_mapping.get(model_name, default_mapping)

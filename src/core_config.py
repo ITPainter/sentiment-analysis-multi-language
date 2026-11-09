@@ -27,30 +27,30 @@ LANGUAGE_OUTPUT_DIRS = {
 
 # Korean models
 KOREAN_MODELS = {
-    'primary': "snunlp/KR-FinBert-SC",           # Main model
-    'alternative': "beomi/KcELECTRA-base-v2022",  # Alternative model
-    'fallback': "klue/roberta-base"              # Fallback model
+    'primary': "snunlp/KR-FinBert-SC",                           # Main model
+    'alternative': "sangrimlee/bert-base-multilingual-cased-nsmc",  # Alternative model
+    'fallback': "matthewburke/korean_sentiment"                  # Fallback model
 }
 
 # Chinese models
 CHINESE_MODELS = {
-    'primary': "IDEA-CCNL/Erlangshen-RoBERTa-110M-Sentiment",  # Main model
-    'alternative': "IDEAL-Future/bert-base-chinese-finetuned-douban-movie",  # Alternative model
-    'fallback': "hfl/chinese-roberta-wwm-ext"                   # Fallback model
+    'primary': "IDEA-CCNL/Erlangshen-Roberta-110M-Sentiment",       # Main model
+    'alternative': "uer/roberta-base-finetuned-dianping-chinese",   # Alternative model
+    'fallback': "uer/roberta-base-finetuned-jd-binary-chinese"      # Fallback model
 }
 
 # English models
 ENGLISH_MODELS = {
-    'primary': "cardiffnlp/twitter-roberta-base-sentiment-latest",  # Main model
-    'alternative': "nlptown/bert-base-multilingual-uncased-sentiment",  # Alternative model
+    'primary': "cardiffnlp/twitter-roberta-base-sentiment-latest",     # Main model
+    'alternative': "finiteautomata/bertweet-base-sentiment-analysis",  # Alternative model
     'fallback': "distilbert-base-uncased-finetuned-sst-2-english"      # Fallback model
 }
 
 # Japanese models
 JAPANESE_MODELS = {
-    'primary': "cl-tohoku/bert-base-japanese-v3",            # Main model
-    'alternative': "rinna/japanese-roberta-base",             # Alternative model
-    'fallback': "megagonlabs/roberta-base-japanese-sentiment"  # Fallback model
+    'primary': "christian-phu/bert-finetuned-japanese-sentiment",  # Main model
+    'alternative': "koheiduck/bert-japanese-finetuned-sentiment",  # Alternative model
+    'fallback': "jarvisx17/japanese-sentiment-analysis"            # Fallback model
 }
 
 # Language-to-model mapping
