@@ -14,18 +14,19 @@ from typing import Dict, Any, Optional
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from core_config import ensure_directories
+from core_config import ensure_directories, LOGGING_CONFIG
 from core_models import get_model_manager
 from data_excel import DataProcessor
 from data_charts import get_visualizer
 from core_language import get_language_name
 
-# Logging setup
+# Logging setup — the only place in the codebase that calls basicConfig,
+# so every other module's logger inherits this configuration.
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=getattr(logging, LOGGING_CONFIG['level'], logging.INFO),
+    format=LOGGING_CONFIG['format'],
     handlers=[
-        logging.FileHandler(project_root / 'output' / 'logs' / 'sentiment_analysis.log', encoding='utf-8'),
+        logging.FileHandler(LOGGING_CONFIG['file'], encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -41,49 +42,45 @@ class MultiLanguageSentimentAnalyzer:
         
         logger.info("Multi-language sentiment analysis system initialized")
     
-    def run_analysis(self, input_file: str, output_dir: Optional[str] = None) -> bool:
+    def run_analysis(self, input_file: str, output_dir: Optional[str] = None,
+                      forced_language: Optional[str] = None) -> bool:
         """
         Runs sentiment analysis.
-        
+
         Args:
             input_file (str): Input Excel file path
             output_dir (Optional[str]): Output directory (default: config output directory)
-            
+            forced_language (Optional[str]): Skip auto-detection and analyze
+                every sheet as this language code (from --lang).
+
         Returns:
             bool: Success status
         """
         try:
             logger.info(f"🚀 Starting sentiment analysis: {input_file}")
-            
-            # 1. Load models
-            logger.info("📚 Loading language-specific models...")
-            model_load_results = self.model_manager.load_all_models()
-            
-            # Show loaded models
-            loaded_models = [lang for lang, success in model_load_results.items() if success]
-            logger.info(f"✅ Loaded models: {', '.join(loaded_models)}")
-            
-            # 2. Process data
+
+            # 1. Process data
             logger.info("📊 Processing Excel file...")
-            processing_results = self.data_processor.process_excel_file(input_file)
-            
+            processing_results = self.data_processor.process_excel_file(input_file, forced_language)
+
             if not processing_results['success']:
                 logger.error(f"Data processing failed: {processing_results.get('error', 'Unknown error')}")
                 return False
-            
-            # 3. Perform sentiment analysis
+
+            # 2. Perform sentiment analysis (models are loaded lazily, per
+            # language, the first time that language is actually needed)
             logger.info("🧠 Performing sentiment analysis...")
             analysis_results = self._perform_sentiment_analysis(processing_results)
-            
-            # 4. Save results
+
+            # 3. Save results
             logger.info("💾 Saving results...")
             saved_files = self.data_processor.save_results(processing_results, output_dir)
-            
-            # 5. Create visualizations
+
+            # 4. Create visualizations
             logger.info("🎨 Creating visualizations...")
             visualization_results = self._create_visualizations(analysis_results, output_dir)
-            
-            # 6. Print summary
+
+            # 5. Print summary
             self._print_summary(processing_results, analysis_results, saved_files, visualization_results)
             
             logger.info("🎉 Sentiment analysis completed!")
@@ -293,6 +290,7 @@ def show_help():
     print()
     print("🔧 Advanced Options:")
     print("  python main.py file.xlsx -o /path  # Custom output directory")
+    print("  python main.py file.xlsx --lang k  # Force language (k/c/e/j) instead of auto-detect")
     print("  python main.py file.xlsx --debug   # Enable debug mode")
 
 def main():
@@ -300,10 +298,12 @@ def main():
     parser = argparse.ArgumentParser(description='Multi-Language Sentiment Analysis System')
     parser.add_argument('input_file', nargs='?', help='Input Excel file path (optional: will create sample data if not provided)')
     parser.add_argument('-o', '--output', help='Output directory (default: config output directory)')
+    parser.add_argument('--lang', choices=['k', 'c', 'e', 'j'],
+                         help='Skip language auto-detection and analyze every sheet as this language '
+                              '(k=Korean, c=Chinese, e=English, j=Japanese)')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--sample', action='store_true', help='Force create sample data and run analysis')
 
-    
     args = parser.parse_args()
     
     # Show help if no arguments provided
@@ -352,7 +352,7 @@ def main():
     try:
         # Run sentiment analysis system
         analyzer = MultiLanguageSentimentAnalyzer()
-        success = analyzer.run_analysis(args.input_file, args.output)
+        success = analyzer.run_analysis(args.input_file, args.output, args.lang)
         
         if success:
             print("\n✅ Sentiment analysis completed successfully!")
@@ -369,10 +369,10 @@ def main():
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return 1
 
-if __name__ == "__main__":
-    # Create directories
+def cli():
+    """Entry point for the `sentiment-analysis` console script (see pyproject.toml)."""
     ensure_directories()
-    
-    # Run main function
-    exit_code = main()
-    sys.exit(exit_code)
+    sys.exit(main())
+
+if __name__ == "__main__":
+    cli()

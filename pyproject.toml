@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentiment-analysis-multi-language"
+version = "0.2.0"
+description = "Multi-language (Korean/Chinese/English/Japanese) sentiment analysis over Excel files, with charts and automatic language detection."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.3.0",
+    "transformers>=4.44.0",
+    "pandas>=2.1.0",
+    "numpy>=1.26.0",
+    "openpyxl>=3.1.0",
+    "matplotlib>=3.8.0",
+    "wordcloud>=1.9.0",
+    "pillow>=11.3.0",
+    "langdetect>=1.0.9",
+    "protobuf>=4.25.0",
+    "fugashi>=1.5.0",
+    "unidic-lite>=1.0.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+sentiment-analysis = "main:cli"
+
+[tool.setuptools]
+# The modules in src/ import each other with flat names (`from core_config
+# import ...`), not relative package imports, so they're installed as
+# top-level modules rather than nested under a package name. This keeps
+# `cd src && python main.py` and `pip install -e .` both working unchanged.
+package-dir = { "" = "src" }
+py-modules = [
+    "main",
+    "core_config",
+    "core_models",
+    "core_language",
+    "data_excel",
+    "data_charts",
+    "data_sample",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

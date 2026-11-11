@@ -7,13 +7,11 @@ import logging
 import torch
 from typing import Dict, Optional, Tuple, Any
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from pathlib import Path
 import os
 
-from core_config import LANGUAGE_MODELS, SENTIMENT_CONFIG
+from core_config import LANGUAGE_MODELS, SENTIMENT_CONFIG, PERFORMANCE_CONFIG
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
+# Logging is configured once in main.py; modules only get a named logger.
 logger = logging.getLogger(__name__)
 
 class ModelManager:
@@ -73,11 +71,13 @@ class ModelManager:
             
             logger.info(f"Loading model: {language} - {model_type} ({model_name})")
             
+            cache_dir = str(PERFORMANCE_CONFIG['cache_dir'])
+
             # Load tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(model_name)
-            
+            tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=cache_dir)
+
             # Load model
-            model = AutoModelForSequenceClassification.from_pretrained(model_name)
+            model = AutoModelForSequenceClassification.from_pretrained(model_name, cache_dir=cache_dir)
             model.to(self.device)
             model.eval()
             

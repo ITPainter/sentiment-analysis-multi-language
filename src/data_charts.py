@@ -5,17 +5,17 @@ Visualization Module
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from pandas.api.types import is_string_dtype
 import numpy as np
 from wordcloud import WordCloud
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 from pathlib import Path
 import os
 
-from core_config import WORDCLOUD_CONFIG, CHART_CONFIG, LANGUAGE_OUTPUT_DIRS
+from core_config import WORDCLOUD_CONFIG, CHART_CONFIG, INPUT_CONFIG
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
+# Logging is configured once in main.py; modules only get a named logger.
 logger = logging.getLogger(__name__)
 
 # matplotlib settings
@@ -232,52 +232,12 @@ class SentimentVisualizer:
             if not processed_text.strip():
                 return None
             
-            # 폰트 설정 (macOS 환경에 최적화)
-            font_path = None
-            if language == 'k':  # Korean
-                # macOS 기본 한국어 폰트들 (우선순위 순)
-                korean_fonts = [
-                    '/System/Library/Fonts/AppleSDGothicNeo.ttc',  # 가장 안정적인 한글 폰트
-                    '/System/Library/Fonts/AppleGothic.ttf',
-                    '/System/Library/AssetsV2/com_apple_MobileAsset_Font7/de4b2bad515a67ab2d11e39fd896b1e189252a43.asset/AssetData/NanumGothic.ttc'  # 나눔고딕
-                ]
-                for font in korean_fonts:
-                    if os.path.exists(font):
-                        font_path = font
-                        logger.info(f"한글 폰트 사용: {font}")
-                        break
-                if not font_path:
-                    logger.warning("한글 폰트를 찾을 수 없어 기본 폰트 사용")
-            elif language == 'c':  # Chinese
-                # macOS 기본 중국어 폰트들
-                chinese_fonts = [
-                    '/System/Library/Fonts/PingFang.ttc',
-                    '/System/Library/Fonts/STHeiti Light.ttc',
-                    '/System/Library/Fonts/STHeiti Medium.ttc'
-                ]
-                for font in chinese_fonts:
-                    if os.path.exists(font):
-                        font_path = font
-                        break
-            elif language == 'j':  # Japanese
-                # macOS 기본 일본어 폰트들
-                japanese_fonts = [
-                    '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
-                    '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc',
-                    '/System/Library/Fonts/ヒラギノ明朝 W3.ttc'
-                ]
-                for font in japanese_fonts:
-                    if os.path.exists(font):
-                        font_path = font
-                        break
-            
-            # 폰트 파일 존재 확인
-            if font_path and os.path.exists(font_path):
+            font_path = self._find_cjk_font(language)
+            if font_path:
                 logger.info(f"Using font: {font_path}")
             else:
-                font_path = None
-                logger.info("Using default font")
-            
+                logger.info("No matching CJK font found on this system; using WordCloud's default font")
+
             # Create wordcloud
             wordcloud = WordCloud(
                 width=self.wordcloud_config['width'],
@@ -356,6 +316,45 @@ class SentimentVisualizer:
             logger.error(f"Confidence histogram creation failed: {str(e)}")
             return None
     
+    # Candidate CJK font paths per OS, checked in order. The wordcloud library
+    # needs an explicit font file for Hangul/Han/Kana glyphs — without one,
+    # non-Latin wordclouds render as empty boxes (tofu).
+    _CJK_FONT_CANDIDATES = {
+        'k': [
+            '/System/Library/Fonts/AppleSDGothicNeo.ttc',                 # macOS
+            '/System/Library/Fonts/AppleGothic.ttf',                      # macOS
+            'C:/Windows/Fonts/malgun.ttf',                                # Windows (Malgun Gothic)
+            '/usr/share/fonts/truetype/nanum/NanumGothic.ttf',            # Linux (fonts-nanum)
+            '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',     # Linux (fonts-noto-cjk)
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+        ],
+        'c': [
+            '/System/Library/Fonts/PingFang.ttc',                         # macOS
+            '/System/Library/Fonts/STHeiti Light.ttc',                    # macOS
+            'C:/Windows/Fonts/msyh.ttc',                                  # Windows (Microsoft YaHei)
+            'C:/Windows/Fonts/simhei.ttf',                                # Windows (SimHei)
+            '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',             # Linux (fonts-wqy-microhei)
+            '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',     # Linux (fonts-noto-cjk)
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+        ],
+        'j': [
+            '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',             # macOS
+            '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc',             # macOS
+            'C:/Windows/Fonts/meiryo.ttc',                                # Windows (Meiryo)
+            'C:/Windows/Fonts/msgothic.ttc',                              # Windows (MS Gothic)
+            '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',     # Linux (fonts-noto-cjk)
+            '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+        ],
+    }
+
+    def _find_cjk_font(self, language: str) -> Optional[str]:
+        """Returns the first existing font file for the language's script, or
+        None to fall back to WordCloud's own default font."""
+        for font_path in self._CJK_FONT_CANDIDATES.get(language, []):
+            if os.path.exists(font_path):
+                return font_path
+        return None
+
     def _preprocess_text_for_wordcloud(self, text: str, language: str) -> str:
         """Text preprocessing for wordcloud"""
         import re
@@ -377,20 +376,24 @@ class SentimentVisualizer:
         elif language == 'e':  # English
             # Keep only English letters
             text = re.sub(r'[^a-zA-Z\s]', ' ', text)
-        
+
+        # The language-specific substitution above can reintroduce runs of
+        # spaces (e.g. digits stripped out of "Hello123 world"), so collapse
+        # once more before returning.
+        text = re.sub(r'\s+', ' ', text)
         return text.strip()
     
     def _find_text_column(self, df: pd.DataFrame) -> Optional[str]:
         """Finds text column"""
-        text_columns = ['comment', '댓글', 'review', 'text', 'comments', '텍스트']
-        
+        text_columns = INPUT_CONFIG['text_columns']
+
         for col in df.columns:
             if col.lower() in [tc.lower() for tc in text_columns]:
                 return col
         
         # Estimate by content
         for col in df.columns:
-            if df[col].dtype == 'object':
+            if is_string_dtype(df[col]):  # pandas 2.x 'object' columns and pandas 3.x 'str' columns alike
                 sample_data = df[col].dropna().head(5)
                 if len(sample_data) > 0:
                     avg_length = sample_data.astype(str).str.len().mean()

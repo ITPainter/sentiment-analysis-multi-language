@@ -5,11 +5,10 @@ Language Auto-Detection Module
 
 import re
 import logging
-from typing import Dict, Tuple, Optional
+from typing import Tuple
 from langdetect import detect, DetectorFactory, LangDetectException
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
+# Logging is configured once in main.py; modules only get a named logger.
 logger = logging.getLogger(__name__)
 
 # Set seed for consistent language detection

@@ -24,3 +24,13 @@ Thumbs.db
 # Python
 __pycache__/
 .venv
+venv/
+*.egg-info/
+
+# Generated analysis output (sample results, charts, logs, model cache) —
+# recreated automatically by core_config.ensure_directories()
+output/
+
+# Test artifacts
+.pytest_cache/
+.coverage

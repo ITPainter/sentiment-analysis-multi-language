@@ -4,16 +4,16 @@ Data Processing Module
 """
 
 import pandas as pd
+from pandas.api.types import is_string_dtype
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any
 from pathlib import Path
 import os
 
-from core_config import INPUT_CONFIG, OUTPUT_CONFIG, LANGUAGE_OUTPUT_DIRS
+from core_config import INPUT_CONFIG, OUTPUT_CONFIG, LANGUAGE_OUTPUT_DIRS, LANGUAGE_DETECTION_CONFIG
 from core_language import batch_detect_languages
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
+# Logging is configured once in main.py; modules only get a named logger.
 logger = logging.getLogger(__name__)
 
 class DataProcessor:
@@ -75,7 +75,7 @@ class DataProcessor:
         
         # If column name not found, estimate by content
         for col in df.columns:
-            if df[col].dtype == 'object':  # String type
+            if is_string_dtype(df[col]):  # pandas 2.x 'object' columns and pandas 3.x 'str' columns alike
                 # Check if it's text by sample data
                 sample_data = df[col].dropna().head(10)
                 if len(sample_data) > 0:
@@ -88,14 +88,17 @@ class DataProcessor:
         logger.warning("Text column not found")
         return None
     
-    def process_sheet(self, df: pd.DataFrame, sheet_name: str) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    def process_sheet(self, df: pd.DataFrame, sheet_name: str,
+                       forced_language: Optional[str] = None) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
         """
         Processes individual sheet.
-        
+
         Args:
             df (pd.DataFrame): DataFrame to process
             sheet_name (str): Sheet name
-            
+            forced_language (Optional[str]): Skip auto-detection and use this
+                language code for every text in the sheet (from --lang).
+
         Returns:
             Tuple[Optional[pd.DataFrame], Optional[str]]: (Processed DataFrame, language code)
         """
@@ -105,22 +108,33 @@ class DataProcessor:
             if text_column is None:
                 logger.warning(f"Text column not found in sheet '{sheet_name}'")
                 return None, None
-            
+
             # Extract text data
             texts = df[text_column].dropna().astype(str).tolist()
             if not texts:
                 logger.warning(f"No text data in sheet '{sheet_name}'")
                 return None, None
-            
+
             logger.info(f"Processing sheet '{sheet_name}': {len(texts)} texts found")
-            
+
+            if forced_language:
+                result_df = df.copy()
+                result_df['detected_language'] = forced_language
+                result_df['language_confidence'] = 1.0
+                result_df['primary_language'] = forced_language
+                logger.info(f"Language forced via --lang: {forced_language}")
+                return result_df, forced_language
+
             # Language detection
             detected_languages = batch_detect_languages(texts)
             
-            # Select most detected language
+            # Select most detected language. This per-text vote threshold is
+            # intentionally looser than LANGUAGE_DETECTION_CONFIG['min_confidence']
+            # (used for the sheet-level fallback below) since short texts often
+            # score 0.5-0.7 and still vote correctly as part of a majority.
             language_counts = {}
             for lang_code, confidence in detected_languages:
-                if confidence > 0.5:  # Confidence threshold
+                if confidence > 0.5:
                     language_counts[lang_code] = language_counts.get(lang_code, 0) + 1
             
             if not language_counts:
@@ -164,15 +178,17 @@ class DataProcessor:
         elif sheet_lower.startswith('e') or 'english' in sheet_lower or '영어' in sheet_name:
             return 'e'
         else:
-            return 'e'  # Default: English
+            return LANGUAGE_DETECTION_CONFIG['fallback_language']
     
-    def process_excel_file(self, file_path: str) -> Dict[str, Any]:
+    def process_excel_file(self, file_path: str, forced_language: Optional[str] = None) -> Dict[str, Any]:
         """
         Processes Excel file completely.
-        
+
         Args:
             file_path (str): Excel file path
-            
+            forced_language (Optional[str]): Skip auto-detection and analyze
+                every sheet as this language (from --lang).
+
         Returns:
             Dict[str, Any]: Processing results
         """
@@ -200,7 +216,7 @@ class DataProcessor:
                 df = pd.read_excel(file_path, sheet_name=sheet_name)
                 
                 # Process sheet
-                processed_df, language = self.process_sheet(df, sheet_name)
+                processed_df, language = self.process_sheet(df, sheet_name, forced_language)
                 
                 if processed_df is not None and language is not None:
                     results['sheets'][sheet_name] = {
@@ -264,22 +280,24 @@ class DataProcessor:
                 output_filename = f"{input_filename}_{sheet_name}_result.xlsx"
                 output_path = lang_output_dir / output_filename
                 
+                output_df = self._apply_output_columns(df)
+
                 # Save as Excel file
                 with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
-                    df.to_excel(writer, sheet_name='Sentiment_Analysis_Results', index=False)
-                    
-                    # Add metadata sheet
-                    metadata = pd.DataFrame({
-                        'Item': ['Processing_Time', 'Language', 'Text_Count', 'Source_File'],
-                        'Value': [
-                            pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
-                            language,
-                            sheet_data['text_count'],
-                            results['file_path']
-                        ]
-                    })
-                    metadata.to_excel(writer, sheet_name='Metadata', index=False)
-                
+                    output_df.to_excel(writer, sheet_name='Sentiment_Analysis_Results', index=False)
+
+                    if OUTPUT_CONFIG['include_metadata']:
+                        metadata = pd.DataFrame({
+                            'Item': ['Processing_Time', 'Language', 'Text_Count', 'Source_File'],
+                            'Value': [
+                                pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                language,
+                                sheet_data['text_count'],
+                                results['file_path']
+                            ]
+                        })
+                        metadata.to_excel(writer, sheet_name='Metadata', index=False)
+
                 saved_files[sheet_name] = str(output_path)
                 logger.info(f"Results saved: {output_path}")
             
@@ -289,6 +307,23 @@ class DataProcessor:
             logger.error(f"Results saving failed: {str(e)}")
             return {}
     
+    def _apply_output_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Drops columns the OUTPUT_CONFIG flags say to exclude. sentiment_label
+        is always kept since it's the point of running the analysis."""
+        language_columns = ['detected_language', 'language_confidence', 'primary_language']
+        confidence_columns = ['language_confidence', 'sentiment_confidence']
+        core_columns = set(language_columns + confidence_columns + ['sentiment_label', 'sentiment_model'])
+
+        columns_to_drop = set()
+        if not OUTPUT_CONFIG['include_original']:
+            columns_to_drop.update(c for c in df.columns if c not in core_columns)
+        if not OUTPUT_CONFIG['include_confidence']:
+            columns_to_drop.update(confidence_columns)
+        if not OUTPUT_CONFIG['include_language']:
+            columns_to_drop.update(language_columns)
+
+        return df.drop(columns=[c for c in columns_to_drop if c in df.columns])
+
     def get_processing_summary(self, results: Dict[str, Any]) -> str:
         """
         Returns processing results summary as string.

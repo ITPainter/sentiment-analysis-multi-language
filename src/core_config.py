@@ -3,7 +3,6 @@
 Multi-Language Sentiment Analysis Configuration
 """
 
-import os
 from pathlib import Path
 
 # =============================================================================
@@ -75,8 +74,7 @@ SENTIMENT_CONFIG = {
 
 # Language detection settings
 LANGUAGE_DETECTION_CONFIG = {
-    'min_confidence': 0.7,      # Minimum confidence for language detection
-    'fallback_language': 'e'    # Default language (English)
+    'fallback_language': 'e'    # Used when a sheet's language can't be detected at all
 }
 
 # =============================================================================
@@ -127,46 +125,6 @@ OUTPUT_CONFIG = {
 }
 
 # =============================================================================
-# 🌐 Language-specific Settings
-# =============================================================================
-
-# Korean settings
-KOREAN_CONFIG = {
-    'font_path': None,  # Use system fonts on macOS
-    'preprocessing': True,
-    'stopwords': True
-}
-
-# Chinese settings
-CHINESE_CONFIG = {
-    'use_jieba': True,
-    'traditional_to_simplified': True,
-    'remove_punctuation': True
-}
-
-# English settings
-ENGLISH_CONFIG = {
-    'use_nltk': True,
-    'remove_stopwords': True,
-    'lemmatization': True
-}
-
-# Japanese settings
-JAPANESE_CONFIG = {
-    'use_mecab': True,
-    'remove_particles': True,
-    'normalize_text': True
-}
-
-# Language-to-config mapping
-LANGUAGE_CONFIGS = {
-    'k': KOREAN_CONFIG,
-    'c': CHINESE_CONFIG,
-    'e': ENGLISH_CONFIG,
-    'j': JAPANESE_CONFIG
-}
-
-# =============================================================================
 # 🔍 Logging Settings
 # =============================================================================
 
@@ -180,12 +138,10 @@ LOGGING_CONFIG = {
 # 🚀 Performance Settings
 # =============================================================================
 
+# Hugging Face model cache. Passed as `cache_dir=` to from_pretrained() so
+# downloaded models stay inside the project instead of ~/.cache/huggingface.
 PERFORMANCE_CONFIG = {
-    'use_cache': True,
-    'cache_dir': OUTPUT_DIR / 'cache',
-    'parallel_processing': True,
-    'max_workers': 4,
-    'memory_limit': '4GB'
+    'cache_dir': OUTPUT_DIR / 'cache'
 }
 
 # =============================================================================
